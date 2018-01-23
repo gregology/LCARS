@@ -10,7 +10,8 @@
     "instruments",
     "dashboard",
     "marine",
-    "nmea"
+    "nmea",
+    "star trek"
   ],
   "repository": {
     "type": "git",
