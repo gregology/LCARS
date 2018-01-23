@@ -1,0 +1,36 @@
+{
+  "name": "signalk-lcars",
+  "version": "0.0.0",
+  "description": "Star Trek themed display of Signal K data",
+  "main": "index.html",
+  "keywords": [
+    "signalk-webapp",
+    "signal k",
+    "signalk",
+    "instruments",
+    "dashboard",
+    "marine",
+    "nmea"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gregology/LCARS.git"
+  },
+  "bugs": "https://github.com/gregology/LCARS/issues",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "npm run watch",
+    "build": "webpack -p --devtool source-map",
+    "watch": "webpack -d --watch"
+  },
+  "author": "Greg Clarke <greg@gho.st>",
+  "contributors": [
+    "Aric McGriff <contact@lcarssdk.org>"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@signalk/client": "^0.1.0",
+    "@signalk/signalk-schema": "0.0.1-6",
+    "webpack": "^3.0.0"
+  }
+}

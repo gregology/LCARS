@@ -1,0 +1,158 @@
+<!-- LCARS
+- JavaScript is not my first language, please let me know when I have not followed best practices
+- This page uses the LCARS SDK. (For more information please go to http://www.lcarssdk.org.)
+-->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="format-detection" content="telephone=no" />
+  <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, target-densitydpi=device-dpi" />
+
+  <title>SV Catsaway - LCARS</title>
+
+  <script>
+    const SHIP_NAME = 'USS Catsaway';
+    const HIGH_WIND = 16; //knots
+    const SHALLOW_WATER = 12; //feet
+    const TRANSDUCER_DEPTH = 1.5; //feet below sealevel
+    const AGGREGATION_PERIOD = 60 * 1000; //milliseconds
+    const WARNING_TIMEOUT = 5 * 60 * 1000; //milliseconds
+    const RECENCY_THRESHOLD = 15 * 1000; //milliseconds
+    const SIGNALK_SERVER = 'core.lan:3000';
+  </script>
+
+  <!--<base href="/">-->
+  <script type="text/javascript" src="lib/lcarssdk/js/jquery.js"></script>
+  <script type="text/javascript" src="lib/lcarssdk/js/webviewinfo.js"></script>
+  <script type="text/javascript" src="lib/lcarssdk/js/arrive.js"></script>
+  <script type="text/javascript" src="lib/lcarssdk/js/lcarssdk.js"></script>
+  <script type="text/javascript" src="lib/lcarssdk/addons/scrollbutton/scrollbutton.js"></script>
+  <script type="text/javascript" src="lib/lcarssdk/addons/levelbar/levelbar.js"></script>
+  <script type="text/javascript" src="lib/lcarssdk/templates/bracket/bracket.js"></script>
+  <script type="text/javascript" src="lib/lcarssdk/templates/dialog/dialog.js"></script>
+  <script type="text/javascript" src="lib/lcarssdk/templates/framing/framing.js"></script>
+  <script type="text/javascript" src="lib/lcarssdk/templates/button/button.js"></script>
+
+  <script type="text/javascript" src="lib/module.js"></script>
+  <script type="text/javascript" src="lib/reconnecting-websocket.min.js"></script>
+  <script type="text/javascript" src="lib/lcars.js"></script>
+  <script type="text/javascript" src="lib/windspeed.js"></script>
+  <script type="text/javascript" src="lib/depth.js"></script>
+  <script type="text/javascript" src="lib/boatspeed.js"></script>
+  <script type="text/javascript" src="lib/bearing.js"></script>
+  <script type="text/javascript" src="lib/location.js"></script>
+
+  <link rel="stylesheet" type="text/css" href="lib/lcarssdk/css/lcarssdk.css">
+  <link rel="stylesheet" type="text/css" href="lib/lcarssdk/addons/scrollbutton/scrollbutton.css">
+  <link rel="stylesheet" type="text/css" href="lib/lcarssdk/addons/levelbar/levelbar.css">
+  <link rel="stylesheet" type="text/css" href="lib/lcarssdk/templates/bracket/bracket.css">
+  <link rel="stylesheet" type="text/css" href="lib/lcarssdk/templates/dialog/dialog.css">
+  <link rel="stylesheet" type="text/css" href="lib/lcarssdk/templates/framing/framing.css">
+  <link rel="stylesheet" type="text/css" href="lib/lcarssdk/templates/button/button.css">
+  <link rel="stylesheet" type="text/css" href="lib/lcarssdk/themes/theme_ussNotAffiliated.css">
+
+  <link rel="stylesheet" type="text/css" href="lib/module.css"></head>
+
+</head>
+
+<body ontouchstart="" onload=""></body>
+
+<script>
+  var ws = new ReconnectingWebSocket("ws://" + SIGNALK_SERVER + "/signalk/v1/stream?subscribe=all");
+
+  ws.onopen = function() {
+    var subscriptionObject = {
+      "context": "vessels.self",
+      "subscribe": [{
+        "path": "*"
+      }]
+    };
+    var subscriptionMessage = JSON.stringify(subscriptionObject);
+    console.log("Sending subscription:" + subscriptionMessage)
+    ws.send(subscriptionMessage);
+  }
+
+  ws.onclose = function() {
+    console.log("ws close");
+  }
+
+  let windSpeed = new WindSpeed();
+  let depth = new Depth();
+
+  let boatSpeedThroughWater = new BoatSpeed('speedthroughwater');
+  let boatSpeedOverGround = new BoatSpeed('speedoverground');
+
+  let magneticHeading = new Bearing('magheading', 'mag heading');
+  let courseOverGroud = new Bearing('courseoverground', 'course over ground');
+
+  let boatLocation = new Location('shipsposition');
+
+  var elementsLoaded = false;
+
+  new Audio('lib/audio/now-estsblishing-datalink.wav').play();
+
+  ws.onmessage = function(event) {
+    data = JSON.parse(event.data);
+    if ('updates' in data && elementsLoaded) {
+      var updates = data['updates'][0];
+      updates["values"].forEach(function(value) {
+        if (value["path"] == "environment.wind.speedApparent") {
+          if (value["value"] != 0) {
+            windSpeed.addReading(metersPerSecondToKnots(value["value"]), Date.parse(updates["timestamp"]))
+            windSpeed.elementText.innerHTML = displayValue(Math.round(metersPerSecondToKnots(value["value"])));
+          }
+        } else if (value["path"] == "navigation.speedThroughWater") {
+          boatSpeedThroughWater.update(value["value"]);
+        } else if (value["path"] == "navigation.speedOverGround") {
+          boatSpeedOverGround.update(value["value"]);
+        } else if (value["path"] == "navigation.position" && updates["source"]["label"] == "core") {
+          boatLocation.update(value['value'])
+        } else if (value["path"] == "navigation.courseOverGroundTrue") {
+          courseOverGroud.update(value["value"]);
+        } else if (value["path"] == "navigation.headingMagnetic") {
+          magneticHeading.update(value["value"]);
+        } else if (value["path"] == "environment.depth.belowTransducer") {
+          var depthReading = metersPerSecondToKnots(value["value"]) + TRANSDUCER_DEPTH;
+          depth.addReading(depthReading, Date.parse(updates["timestamp"]));
+          depth.elementText.innerHTML = displayTwoNumbers(depthReading);
+          depth.drawGraph();
+        }
+      });
+    }
+  }
+
+  setTimeout(function() { // timeout is necessary as html is progmatically loaded
+    windSpeed.loadElements();
+    depth.loadElements();
+    boatSpeedThroughWater.loadElements();
+    boatSpeedOverGround.loadElements();
+    magneticHeading.loadElements();
+    courseOverGroud.loadElements();
+    boatLocation.loadElements();
+
+    elementsLoaded = true;
+
+    new Audio('lib/audio/ready.wav').play();
+
+    windSpeed.checkAlarms();
+    windSpeed.removeOldReadings();
+    windSpeed.updateAggregates();
+    depth.removeOldReadings();
+    depth.checkAlarms();
+
+    windSpeed.elementButton.style.cursor = 'pointer';
+    windSpeed.elementButton.onclick = function() {
+      windSpeed.acknowledgeAlarm()
+    };
+
+    depth.elementButton.style.cursor = 'pointer';
+    depth.elementButton.onclick = function() {
+      depth.acknowledgeAlarm()
+    };
+  }, 2000);
+
+</script>
+
+</html>
