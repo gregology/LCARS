@@ -13,13 +13,52 @@
   <title>USS Catsaway - LCARS</title>
 
   <script>
-    const SHIP_NAME = 'USS Catsaway';
-    const HIGH_WIND = 16; //knots
-    const SHALLOW_WATER = 12; //feet
-    const TRANSDUCER_DEPTH = 1.5; //feet below sealevel
-    const AGGREGATION_PERIOD = 60 * 1000; //milliseconds
-    const WARNING_TIMEOUT = 5 * 60 * 1000; //milliseconds
-    const RECENCY_THRESHOLD = 15 * 1000; //milliseconds
+    //settings (this will eventually be moved to a config file or alike)
+    const HIGH_WIND = 18; // knots
+    const SHALLOW_WATER = 5; // feet
+    const TRANSDUCER_DEPTH = 1; // feet below sealevel
+    const AGGREGATION_PERIOD = 60 * 1000; // milliseconds
+    const WARNING_TIMEOUT = 5 * 60 * 1000; // milliseconds
+    const RECENCY_THRESHOLD = 15 * 1000; // milliseconds
+    const VESSEL_GPS_PROVIDER_ID = 'core'; // eventually will use multiple GPS providers of people onboard
+    const CREW = [
+      {
+        'name': 'Diana',
+        'gpsProviderId': 'tricorder02',
+        'deviceNotConnected': '🤷‍♀️',
+        'overboard': '🙋‍♀️',
+        'onboard': '🚣‍♀️'
+      }, {
+        'name': 'Greg',
+        'gpsProviderId': 'tricorder01',
+        'deviceNotConnected': '🤷‍♂️',
+        'overboard': '🙋‍♂️',
+        'onboard': '🚣‍♂️'
+      }
+    ];
+  </script>
+
+  <script>
+    const COURSE_OVER_GROUND = 'Course over Ground';
+    const MAGNETIC_HEADING = 'Mag Heading';
+    const CURRENT_SPEED_IN_KNOTS = 'Current Speed in Knots';
+    const CURRENT_DEPTH_IN_FEET = 'Current Depth in Feet';
+    const ERROR = {
+      'noRecentReadings': 'Error - No Recent Readings!'
+    }
+
+    if (window.location.host == "") {
+      var server_address = 'core.lan';
+    } else {
+      var server_address = window.location.host;
+    }
+    const SERVER_ADDRESS = server_address;
+
+    // var oReq = new XMLHttpRequest();
+    // oReq.open("GET", "http://" + SERVER_ADDRESS + "/signalk/v1/api/vessels/self/name");
+    // oReq.send();
+
+    const VESSEL_NAME = 'USS Catsaway'; // oReq.responseText;
   </script>
 
   <!--<base href="/">-->
@@ -59,7 +98,7 @@
 <body ontouchstart="" onload=""></body>
 
 <script>
-  var ws = new ReconnectingWebSocket("ws://" + window.location.host + "/signalk/v1/stream?subscribe=all");
+  var ws = new ReconnectingWebSocket("ws://" + SERVER_ADDRESS + "/signalk/v1/stream?subscribe=all");
 
   ws.onopen = function() {
     var subscriptionObject = {
@@ -83,8 +122,8 @@
   let boatSpeedThroughWater = new BoatSpeed('speedthroughwater');
   let boatSpeedOverGround = new BoatSpeed('speedoverground');
 
-  let magneticHeading = new Bearing('magheading', 'mag heading');
-  let courseOverGroud = new Bearing('courseoverground', 'course over ground');
+  let magneticHeading = new Bearing('magheading', MAGNETIC_HEADING);
+  let courseOverGroud = new Bearing('courseoverground', COURSE_OVER_GROUND);
 
   let boatLocation = new Location('shipsposition');
 
@@ -106,14 +145,14 @@
           boatSpeedThroughWater.update(value["value"]);
         } else if (value["path"] == "navigation.speedOverGround") {
           boatSpeedOverGround.update(value["value"]);
-        } else if (value["path"] == "navigation.position" && updates["source"]["label"] == "core") {
+        } else if (value["path"] == "navigation.position" && updates["source"]["label"] == VESSEL_GPS_PROVIDER_ID) {
           boatLocation.update(value['value'])
         } else if (value["path"] == "navigation.courseOverGroundTrue") {
           courseOverGroud.update(value["value"]);
         } else if (value["path"] == "navigation.headingMagnetic") {
           magneticHeading.update(value["value"]);
         } else if (value["path"] == "environment.depth.belowTransducer") {
-          var depthReading = metersPerSecondToKnots(value["value"]) + TRANSDUCER_DEPTH;
+          var depthReading = metersToFeet(value["value"]) + TRANSDUCER_DEPTH;
           depth.addReading(depthReading, Date.parse(updates["timestamp"]));
           depth.elementText.innerHTML = displayTwoNumbers(depthReading);
           depth.drawGraph();
